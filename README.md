@@ -15,11 +15,32 @@ An interactive Streamlit demo that ingests Wikimedia clickstream data, surfaces 
 - Funnel builder lets you pick ordered pages and estimates completions/drop-offs from aggregated edge counts.
 
 ## Configuration
-- Switch datasets in the sidebar between Simple English (small), English (full), or a custom URL.
+- Switch datasets in the sidebar between German (smaller), English (full), or a custom URL.
 - To force a different default without the UI: set `CLICKSTREAM_URL` before running Streamlit.
 - Use the sidebar row cap to keep the demo responsive; uncheck to process the full file.
 
-## Next steps
-- Wire the loader into a Kafka producer to replay events into MSK.
-- Replace the cached parquet with a Snowflake table via the Snowflake connector.
-- Add Spark Structured Streaming on top of Kafka for sessionization and richer funnel math.
+## Milestone 1: Data Profiling & Ingestion
+Goal: Set up a Kafka producer, profile Wikimedia pageviews JSON, and validate schema quality.
+
+### 1) Create/verify Kafka topic
+- Ensure Kafka is reachable (MSK/localhost) and create a topic, e.g. `wm_pageviews`.
+  - Local example: `kafka-topics --bootstrap-server localhost:9092 --create --topic wm_pageviews --partitions 3 --replication-factor 1`
+
+### 2) Produce pageview events into Kafka
+- Command: `python kafka_producer.py --bootstrap localhost:9092 --topic wm_pageviews --limit 20000`
+- Flags:
+  - `--source`: URL or local `pageviews-YYYYMMDD-HH0000.gz` (defaults to 2024-01-01-00).
+  - `--limit`: optional cap to keep tests fast.
+  - Env overrides: `KAFKA_BOOTSTRAP`, `KAFKA_TOPIC`, `PAGEVIEWS_SOURCE`.
+
+### 3) Profile the raw pageview schema/quality
+- Command: `python pageviews_profile.py --limit 50000`
+- Flags:
+  - `--source`: same URL/path as above; defaults to 2024-01-01-00.
+  - `--limit`: rows to scan; set to `0` or omit to scan all (can be large).
+- Output includes field completeness, top projects/pages, and a quick bytes sanity check.
+
+### 4) What remains for Milestone 1
+- Run the producer against your Kafka endpoint and confirm events land in `wm_pageviews`.
+- Run the profiler on the same file/stream to validate schema and spot anomalies.
+- Optional: add alerting/validation rules (e.g., drop records missing `page` or `project` before producing).
