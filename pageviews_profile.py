@@ -57,9 +57,38 @@ def profile(source: str, limit: int | None) -> None:
     total = 0
 
     for raw_line in load_source(source):
+        rec = None
         try:
+            # Try JSON first (for JSON-formatted sources)
             rec = json.loads(raw_line)
         except json.JSONDecodeError:
+            # If not JSON, try space-separated format (Wikimedia pageviews format)
+            # Format: domain_code page_title count_views total_response_size
+            parts = raw_line.strip().split()
+            if len(parts) >= 4:
+                try:
+                    domain_code = parts[0].strip('"') if parts[0].startswith('"') else parts[0]
+                    if len(parts) > 4:
+                        page_title = ' '.join(parts[1:-2])
+                    else:
+                        page_title = parts[1] if len(parts) > 1 else ""
+                    views = int(parts[-2])
+                    bytes_val = int(parts[-1])
+                    
+                    project = domain_code if domain_code and domain_code != '""' else None
+                    
+                    rec = {
+                        "project": project,
+                        "page": page_title,
+                        "views": views,
+                        "bytes": bytes_val,
+                    }
+                except (ValueError, IndexError):
+                    continue
+            else:
+                continue
+
+        if rec is None:
             continue
 
         total += 1
