@@ -107,4 +107,3 @@ python kafka_consumer.py --bootstrap localhost:9092 --topic wm_pageviews --verbo
 - Run the producer against your Kafka endpoint and confirm events land in `wm_pageviews`.
 - Run the profiler on the same file/stream to validate schema and spot anomalies.
 - Optional: add alerting/validation rules (e.g., drop records missing `page` or `project` before producing). -->
-
