@@ -81,15 +81,67 @@ def main() -> None:
         default=None,
         help="Optional max number of records to send (for quick tests).",
     )
+    parser.add_argument(
+        "--verbose",
+        dest="verbose",
+        action="store_true",
+        help="Show debug output.",
+    )
     args = parser.parse_args()
 
     producer = build_producer(args.bootstrap)
     sent = 0
+    total_lines = 0
+    parse_errors = 0
+    sample_errors = []
+    
+    print(f"Loading source: {args.source}")
     for raw_line in load_source(args.source):
+        total_lines += 1
         try:
+            # Try JSON first (for JSON-formatted sources)
             payload = json.loads(raw_line)
         except json.JSONDecodeError:
-            continue
+            # If not JSON, try space-separated format (Wikimedia pageviews format)
+            # Format: domain_code page_title count_views total_response_size
+            # Note: Page titles may contain spaces, so we need to split carefully
+            # The format is: first field (domain), last two fields (views, bytes), 
+            # and everything in between is the page title
+            parts = raw_line.strip().split()
+            if len(parts) >= 4:
+                try:
+                    # Parse space-separated format
+                    domain_code = parts[0].strip('"') if parts[0].startswith('"') else parts[0]
+                    # Last two fields are views and bytes
+                    views = int(parts[-2])
+                    bytes_val = int(parts[-1])
+                    # Everything in between is the page title (handles spaces in titles)
+                    if len(parts) > 4:
+                        page_title = ' '.join(parts[1:-2])
+                    else:
+                        page_title = parts[1] if len(parts) > 1 else ""
+                    
+                    # Extract project from domain_code (e.g., "en.wikipedia" -> "en.wikipedia")
+                    # Handle empty domain
+                    project = domain_code if domain_code and domain_code != '""' else None
+                    
+                    payload = {
+                        "project": project,
+                        "page": page_title,
+                        "views": views,
+                        "bytes": bytes_val,
+                    }
+                except (ValueError, IndexError) as e:
+                    parse_errors += 1
+                    if args.verbose and len(sample_errors) < 3:
+                        sample_errors.append((raw_line[:100], f"Parse error: {e}"))
+                    continue
+            else:
+                parse_errors += 1
+                if args.verbose and len(sample_errors) < 3:
+                    sample_errors.append((raw_line[:100], f"Not enough fields (got {len(parts)}, need 4+)"))
+                continue
+        
         key = payload.get("page") or payload.get("title") or ""
         producer.send(args.topic, value=payload, key=key)
         sent += 1
@@ -98,6 +150,14 @@ def main() -> None:
 
     producer.flush()
     print(f"Sent {sent} records to topic '{args.topic}' on {args.bootstrap}")
+    if args.verbose or sent == 0:
+        print(f"Total lines read: {total_lines:,}")
+        print(f"Parse errors: {parse_errors:,}")
+        if sample_errors:
+            print("\nSample parse errors:")
+            for line_sample, error in sample_errors:
+                print(f"  Line: {line_sample}...")
+                print(f"  Error: {error}")
 
 
 if __name__ == "__main__":

@@ -26,6 +26,40 @@ Goal: Set up a Kafka producer, profile Wikimedia pageviews JSON, and validate sc
 - Ensure Kafka is reachable (MSK/localhost) and create a topic, e.g. `wm_pageviews`.
   - Local example: `kafka-topics --bootstrap-server localhost:9092 --create --topic wm_pageviews --partitions 3 --replication-factor 1`
 
+#### Kafka Setup (Local Development)
+
+Kafka requires Java 11 or later. This project uses Java 17.
+
+##### Prerequisites
+- Java 17 installed (Kafka requires Java 11+)
+- Homebrew (for macOS installation)
+
+##### Installation Steps
+
+1. **Install Kafka and Zookeeper**
+   ```bash
+   brew install kafka
+   brew install zookeeper
+   ```
+   Note: This installs both Kafka and Zookeeper.
+
+2. **Start Services**
+   ```bash
+   brew services start zookeeper
+   brew services start kafka
+   ```
+
+3. **Create Kafka Topic**
+   ```bash
+   kafka-topics --bootstrap-server localhost:9092 --create --topic wm_pageviews --partitions 3 --replication-factor 1
+   ```
+
+##### Verify Installation
+- Check if services are running: `brew services list`
+- List topics: `kafka-topics --bootstrap-server localhost:9092 --list`
+- Describe topic: `kafka-topics --bootstrap-server localhost:9092 --describe --topic wm_pageviews`
+
+
 ### 2) Produce pageview events into Kafka
 - Command: `python kafka_producer.py --bootstrap localhost:9092 --topic wm_pageviews --limit 20000`
 - Flags:
@@ -40,7 +74,37 @@ Goal: Set up a Kafka producer, profile Wikimedia pageviews JSON, and validate sc
   - `--limit`: rows to scan; set to `0` or omit to scan all (can be large).
 - Output includes field completeness, top projects/pages, and a quick bytes sanity check.
 
-### 4) What remains for Milestone 1
+### 4) Consume pageview events from Kafka
+- Command: `python kafka_consumer.py --bootstrap localhost:9092 --topic wm_pageviews --limit 100`
+- Flags:
+  - `--bootstrap`: Kafka bootstrap servers (default: localhost:9092)
+  - `--topic`: Topic to consume from (default: wm_pageviews)
+  - `--group-id`: Consumer group ID (default: clickstream-consumer-group)
+  - `--from-beginning`: Start from earliest available offset (default: latest)
+  - `--limit`: Maximum number of messages to consume (default: unlimited)
+  - `--output`: Output file path for messages in JSONL format
+  - `--verbose`: Print detailed information about each message
+  - `--no-auto-commit`: Disable auto-commit of offsets
+  - `--timeout`: Consumer timeout in milliseconds (default: 5000)
+- Env overrides: `KAFKA_BOOTSTRAP`, `KAFKA_TOPIC`, `KAFKA_GROUP_ID`
+
+**Examples:**
+```bash
+# Consume from latest offset with a consumer group
+python kafka_consumer.py --bootstrap localhost:9092 --topic wm_pageviews --group-id my-group
+
+# Consume from beginning (all messages)
+python kafka_consumer.py --bootstrap localhost:9092 --topic wm_pageviews --from-beginning
+
+# Consume 100 messages and save to file
+python kafka_consumer.py --bootstrap localhost:9092 --topic wm_pageviews --limit 100 --output messages.jsonl
+
+# Verbose mode
+python kafka_consumer.py --bootstrap localhost:9092 --topic wm_pageviews --verbose
+```
+
+<!-- ### 5) What remains for Milestone 1
 - Run the producer against your Kafka endpoint and confirm events land in `wm_pageviews`.
 - Run the profiler on the same file/stream to validate schema and spot anomalies.
-- Optional: add alerting/validation rules (e.g., drop records missing `page` or `project` before producing).
+- Optional: add alerting/validation rules (e.g., drop records missing `page` or `project` before producing). -->
+
