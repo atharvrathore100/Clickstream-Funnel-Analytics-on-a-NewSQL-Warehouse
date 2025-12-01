@@ -16,3 +16,6 @@ BDT/
 # Kafka logs (if accidently inside repo)
 kafka-logs/
 kraft-logs/
+
+# Local environment overrides
+.env
