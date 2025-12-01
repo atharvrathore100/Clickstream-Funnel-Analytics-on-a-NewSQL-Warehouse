@@ -300,4 +300,117 @@ Choose the desired view in the sidebar:
 
 ---
 
-This is the complete unrendered Markdown, ready to paste into your repo.
+## Steps to run full project
+
+1. **Project setup**
+   ```bash
+   cd ~/Clickstream-Funnel-Analytics-on-a-NewSQL-Warehouse
+   python3 -m venv BDT && source BDT/bin/activate
+   python3 -m pip install --upgrade pip
+   python3 -m pip install -r requirements.txt
+   ```
+
+2. **Kafka (Milestone 1)**
+   - Download + format (first time):
+     ```bash
+     cd ~
+     wget https://downloads.apache.org/kafka/3.9.1/kafka_2.13-3.9.1.tgz
+     tar -xzf kafka_2.13-3.9.1.tgz && mv kafka_2.13-3.9.1 kafka
+     cd ~/kafka
+     bin/kafka-storage.sh random-uuid
+     bin/kafka-storage.sh format -t <uuid> -c config/kraft/server.properties
+     ```
+   - Start broker (keep terminal open):
+     ```bash
+     cd ~/kafka
+     bin/kafka-server-start.sh config/kraft/server.properties
+     ```
+   - Create/check topic:
+     ```bash
+     cd ~/kafka
+     bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --topic wm_pageviews --partitions 3 --replication-factor 1
+     ```
+
+3. **Milestone 1 scripts**
+   ```bash
+   cd ~/Clickstream-Funnel-Analytics-on-a-NewSQL-Warehouse
+   source BDT/bin/activate
+   python pageviews_profile.py --limit 50000
+   python kafka_producer.py --bootstrap localhost:9092 --topic wm_pageviews --limit 50000
+   python kafka_consumer.py --bootstrap localhost:9092 --topic wm_pageviews --from-beginning --limit 100 --verbose
+   ```
+
+4. **Snowflake raw ingestion (Milestone 2)**
+   - Export env vars:
+     ```bash
+     export SNOWFLAKE_ACCOUNT=mawsfhr-wb66764
+     export SNOWFLAKE_USER=atharvrathore
+     export SNOWFLAKE_PASSWORD='Atharvrathore@06'
+     export SNOWFLAKE_WAREHOUSE=BDT_warehouse
+     export SNOWFLAKE_DATABASE=ANALYTICS
+     export SNOWFLAKE_SCHEMA=PUBLIC
+     ```
+   - Snowflake SQL (run once as ACCOUNTADMIN):
+     ```sql
+     CREATE WAREHOUSE IF NOT EXISTS BDT_warehouse WAREHOUSE_SIZE='XSMALL' AUTO_SUSPEND=60 AUTO_RESUME=TRUE;
+     CREATE DATABASE IF NOT EXISTS ANALYTICS;
+     CREATE SCHEMA IF NOT EXISTS ANALYTICS.PUBLIC;
+     GRANT USAGE ON WAREHOUSE BDT_warehouse TO ROLE SYSADMIN;
+     GRANT USAGE ON DATABASE ANALYTICS TO ROLE SYSADMIN;
+     GRANT USAGE, CREATE TABLE ON SCHEMA ANALYTICS.PUBLIC TO ROLE SYSADMIN;
+     ```
+   - Load data:
+     ```bash
+     python3 snowflake_stage_loader.py --source data/pageviews.tsv.gz --role ACCOUNTADMIN
+     python3 snowflake_stage_loader.py --source data/clickstream.tsv --table CLICKSTREAM_RAW --role ACCOUNTADMIN
+     ```
+   - Optional Kafka → Snowflake bridge:
+     ```bash
+     python kafka_to_snowflake.py --bootstrap localhost:9092 --topic wm_pageviews --from-beginning --batch-size 1000 --role ACCOUNTADMIN
+     ```
+
+5. **Spark sessionizer (Milestone 3)**
+   ```bash
+   sudo apt install -y openjdk-17-jdk
+   python3 -m pip install pyspark==3.5.1
+   export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+   ```
+   - Prepare modeled schema:
+     ```sql
+     CREATE SCHEMA IF NOT EXISTS ANALYTICS.MODELLED;
+     GRANT USAGE, CREATE TABLE ON SCHEMA ANALYTICS.MODELLED TO ROLE ACCOUNTADMIN;
+     ```
+   - Run streaming job (new terminal with env vars):
+     ```bash
+     spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0 \
+       spark_sessionizer.py \
+       --bootstrap localhost:9092 \
+       --topic wm_pageviews \
+       --from-beginning \
+       --session-gap-minutes 10 \
+       --account "$SNOWFLAKE_ACCOUNT" \
+       --user "$SNOWFLAKE_USER" \
+       --password "$SNOWFLAKE_PASSWORD" \
+       --warehouse "$SNOWFLAKE_WAREHOUSE" \
+       --database "$SNOWFLAKE_DATABASE" \
+       --raw-schema PUBLIC \
+       --raw-table PAGEVIEWS_RAW \
+       --target-schema MODELLED \
+       --target-table SESSION_METRICS \
+       --seed-from-raw \
+       --truncate-target
+     ```
+
+6. **Streamlit dashboard (Milestone 4)**
+   ```bash
+   export SNOWFLAKE_TARGET_SCHEMA=MODELLED
+   export SNOWFLAKE_TARGET_TABLE=SESSION_METRICS
+   python -m streamlit run streamlit_app.py
+   ```
+   - Sidebar → choose “Snowflake Streaming Sessions” for live data; “Local Clickstream Demo” for TSV exploration.
+
+7. **Verify pipeline**
+   - Kafka offsets: `~/kafka/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group clickstream-consumer-group`
+   - Snowflake RAW: `SELECT COUNT(*) FROM ANALYTICS.PUBLIC.PAGEVIEWS_RAW;`
+   - Snowflake MODELED: `SELECT COUNT(*) FROM ANALYTICS.MODELLED.SESSION_METRICS;`
+   - Streamlit shows session metrics without errors.
