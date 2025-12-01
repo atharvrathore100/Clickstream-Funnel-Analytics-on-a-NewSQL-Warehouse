@@ -11,6 +11,7 @@ from clickstream_loader import (
     top_entries,
     top_transitions,
 )
+from snowflake_dashboard import fetch_session_metrics
 
 
 st.set_page_config(page_title="Clickstream Funnel Analytics", layout="wide")
@@ -21,11 +22,13 @@ def _load_data(url: str, limit_rows: int | None):
     return load_clickstream(url=url, limit_rows=limit_rows)
 
 
-def main() -> None:
-    st.title("Clickstream Funnel Analytics")
-    st.caption("Wikimedia clickstream demo powered by Python + Streamlit.")
+@st.cache_data(ttl=60)
+def _load_sessions(hours: int, limit: int):
+    return fetch_session_metrics(hours=hours, limit=limit)
 
-    st.sidebar.header("Data")
+
+def render_local_demo() -> None:
+    st.sidebar.header("Local clickstream data")
     dataset_choice = st.sidebar.radio(
         "Clickstream source",
         options=[
@@ -151,6 +154,108 @@ def main() -> None:
     st.divider()
     st.subheader("Raw Sample")
     st.dataframe(df.head(20))
+
+
+def render_snowflake_sessions() -> None:
+    st.sidebar.header("Snowflake streaming data")
+    lookback_hours = st.sidebar.slider(
+        "Lookback window (hours)",
+        min_value=1,
+        max_value=72,
+        value=24,
+        help="Controls how far back to query sessionized data from Snowflake.",
+    )
+    limit = st.sidebar.slider("Max sessions to fetch", min_value=100, max_value=2000, step=100, value=500)
+    try:
+        with st.spinner("Querying Snowflake MODELLED tables..."):
+            df, summary = _load_sessions(lookback_hours, limit)
+    except RuntimeError as exc:
+        st.error(
+            f"{exc}\n\nSet SNOWFLAKE_ACCOUNT / USER / PASSWORD (and optional WAREHOUSE/DATABASE) before using this view."
+        )
+        return
+    except Exception as exc:  # pragma: no cover
+        st.error(f"Failed to query Snowflake: {exc}")
+        return
+
+    st.success(
+        "Connected to Snowflake and reading sessionized data driven by Milestones 1-3 (Kafka ➜ Snowflake ➜ Spark)."
+    )
+
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Sessions", f"{summary['sessions']:,}")
+    with col2:
+        st.metric("Events", f"{summary['events']:,}")
+    with col3:
+        st.metric("Views", f"{summary['views']:,}")
+    with col4:
+        st.metric("Bytes", f"{summary['bytes']:,}")
+
+    if df.empty:
+        st.info("No session data found in the selected window. Let the streaming job run longer or widen the window.")
+        return
+
+    df["session_start"] = pd.to_datetime(df["session_start"])
+    df["session_end"] = pd.to_datetime(df["session_end"])
+
+    st.subheader("Sessions over time")
+    trend = (
+        df.groupby(pd.Grouper(key="session_start", freq="1H"))
+        .agg({"events": "sum"})
+        .reset_index()
+        .rename(columns={"events": "total_events"})
+    )
+    chart = (
+        alt.Chart(trend)
+        .mark_line(color="#3b82f6")
+        .encode(
+            x=alt.X("session_start:T", title="Hour"),
+            y=alt.Y("total_events:Q", title="Events"),
+            tooltip=["session_start", "total_events"],
+        )
+    )
+    st.altair_chart(chart, use_container_width=True)
+
+    st.subheader("Top projects by session volume")
+    proj_df = (
+        df.groupby("project", as_index=False)["events"]
+        .sum()
+        .sort_values("events", ascending=False)
+        .head(10)
+    )
+    proj_chart = (
+        alt.Chart(proj_df)
+        .mark_bar(color="#10b981")
+        .encode(
+            x=alt.X("events:Q", title="Events"),
+            y=alt.Y("project:N", sort="-x", title="Project"),
+            tooltip=["project", "events"],
+        )
+    )
+    st.altair_chart(proj_chart, use_container_width=True)
+
+    st.subheader("Session detail (Snowflake MODELLED.SESSION_METRICS)")
+    st.dataframe(df.head(limit))
+
+
+def main() -> None:
+    st.title("Clickstream Funnel Analytics")
+    st.caption("Milestones 1-4: Kafka ➜ Snowflake ➜ Spark ➜ Streamlit.")
+
+    mode = st.sidebar.selectbox(
+        "Data view",
+        options=[
+            "Local Clickstream Demo",
+            "Snowflake Streaming Sessions",
+        ],
+        help="Local view uses cached TSVs; Snowflake view reads Milestones 1-3 output.",
+    )
+
+    if mode == "Snowflake Streaming Sessions":
+        render_snowflake_sessions()
+    else:
+        render_local_demo()
 
 
 if __name__ == "__main__":
