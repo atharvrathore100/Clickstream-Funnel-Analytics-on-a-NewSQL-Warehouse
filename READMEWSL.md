@@ -152,9 +152,9 @@ Use the exact command:
 ```bash
 python3 snowflake_stage_loader.py \
   --source data/pageviews.tsv.gz \
-  --account mawsfhr-wb66764 \
-  --user atharvrathore \
-  --password Atharvrathore@06 \
+  --account <Your_account> \
+  --user <your_username> \
+  --password <your_Password> \
   --warehouse BDT_warehouse \
   --database ANALYTICS \
   --schema PUBLIC \
@@ -171,9 +171,9 @@ If your extracted TSV file is named `clickstream.tsv`, run:
 ```bash
 python3 snowflake_stage_loader.py \
   --source data/clickstream.tsv \
-  --account mawsfhr-wb66764 \
-  --user atharvrathore \
-  --password Atharvrathore@06 \
+  --account <Your_account> \
+  --user <your_username> \
+  --password <your_Password> \
   --warehouse BDT_warehouse \
   --database ANALYTICS \
   --schema PUBLIC \
@@ -207,9 +207,9 @@ python kafka_to_snowflake.py \
   --topic wm_pageviews \
   --from-beginning \
   --batch-size 1000 \
-  --account mawsfhr-wb66764 \
-  --user atharvrathore \
-  --password Atharvrathore@06 \
+  --account <Your_account> \
+  --user <your_username> \
+  --password <your_Password> \
   --warehouse BDT_warehouse \
   --database ANALYTICS \
   --schema PUBLIC \
@@ -244,9 +244,9 @@ spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0 \
   --topic wm_pageviews \
   --from-beginning \
   --session-gap-minutes 10 \
-  --account mawsfhr-wb66764 \
-  --user atharvrathore \
-  --password Atharvrathore@06 \
+  --account <Your_account> \
+  --user <your_username> \
+  --password <your_Password> \
   --warehouse BDT_warehouse \
   --database ANALYTICS \
   --raw-schema PUBLIC \
@@ -268,5 +268,3 @@ LIMIT 20;
 ```
 
 ---
-
-This is the complete unrendered Markdown, ready to paste into your repo.
