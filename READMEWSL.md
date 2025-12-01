@@ -4,6 +4,7 @@ This project runs fully inside WSL Ubuntu, not Windows.
 Use these commands exactly as written.
 
 ---
+# Milestone 1: 
 
 ## 1) Create and activate your Python venv
 ```bash
@@ -192,6 +193,30 @@ This loads the **clickstream edge data** into `ANALYTICS.PUBLIC.CLICKSTREAM_RAW`
 ✓ `clickstream.tsv` ingested successfully  
 ✓ Raw VARIANT tables created if not present  
 ✓ Ready for Milestone 3 (Transform layer + Funnels + Aggregation)
+
+---
+
+## Bonus: Stream Kafka directly into Snowflake
+Once producers are running, bridge Milestone 1 and 2 in real time:
+
+```bash
+python kafka_producer.py --bootstrap localhost:9092 --topic wm_pageviews --limit 50000
+
+python kafka_to_snowflake.py \
+  --bootstrap localhost:9092 \
+  --topic wm_pageviews \
+  --from-beginning \
+  --batch-size 1000 \
+  --account mawsfhr-wb66764 \
+  --user atharvrathore \
+  --password Atharvrathore@06 \
+  --warehouse BDT_warehouse \
+  --database ANALYTICS \
+  --schema PUBLIC \
+  --role ACCOUNTADMIN
+```
+
+This consumes Kafka offsets, writes them to Snowflake VARIANT rows, and prints progress as it flushes each batch.
 
 ---
 
