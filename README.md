@@ -213,3 +213,61 @@ FROM ANALYTICS.RAW.PAGEVIEWS_RAW;
 ```
 
 At this point Milestones 1 and 2 operate as a single pipeline: raw dumps → Kafka topic → Snowflake VARIANT staging.
+
+## Milestone 3: Sessionization & Transformation Layer
+Goal: Use Spark Structured Streaming to read the Kafka topic, build session aggregates, and land the modeled results beside the Milestone 2 RAW tables.
+
+### Prerequisites
+```bash
+sudo apt install -y openjdk-17-jdk
+python3 -m pip install pyspark==3.5.1
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64  # adjust for your distro
+```
+Snowflake prep (run once):
+```sql
+CREATE SCHEMA IF NOT EXISTS ANALYTICS.MODELLED;
+GRANT USAGE, CREATE TABLE ON SCHEMA ANALYTICS.MODELLED TO ROLE SYSADMIN;
+```
+
+### Stream Kafka into modeled Snowflake tables
+1. Ensure Milestones 1 & 2 are producing data (Kafka topic populated, Snowflake RAW table filling via `snowflake_stage_loader.py` or `kafka_to_snowflake.py`).
+2. Start the sessionizer (run from your project root). `spark-submit` downloads the Kafka connector automatically via `--packages`.
+```bash
+spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0 \
+  spark_sessionizer.py \
+  --bootstrap localhost:9092 \
+  --topic wm_pageviews \
+  --from-beginning \
+  --session-gap-minutes 10 \
+  --account "$SNOWFLAKE_ACCOUNT" \
+  --user "$SNOWFLAKE_USER" \
+  --password "$SNOWFLAKE_PASSWORD" \
+  --warehouse "$SNOWFLAKE_WAREHOUSE" \
+  --database "$SNOWFLAKE_DATABASE" \
+  --raw-schema RAW \
+  --raw-table PAGEVIEWS_RAW \
+  --target-schema MODELLED \
+  --target-table SESSION_METRICS \
+  --seed-from-raw \
+  --truncate-target
+```
+
+What happens:
+- The script optionally backfills (`--seed-from-raw`) using the staged RAW data (Milestone 2), proving both layers communicate.
+- Structured Streaming reads live Kafka events, groups them by project + session window (gap configurable via `--session-gap-minutes`), and writes aggregates to `ANALYTICS.MODELLED.SESSION_METRICS`.
+- State is checkpointed under `data/checkpoints/sessionizer` so restarts resume automatically.
+
+### Validate the modeled layer
+```sql
+SELECT project,
+       session_start,
+       session_end,
+       events,
+       total_views,
+       total_bytes
+FROM ANALYTICS.MODELLED.SESSION_METRICS
+ORDER BY session_start DESC
+LIMIT 20;
+```
+
+If you need to regenerate sessions, rerun the command with `--truncate-target --seed-from-raw` before letting the stream catch up on Kafka offsets.

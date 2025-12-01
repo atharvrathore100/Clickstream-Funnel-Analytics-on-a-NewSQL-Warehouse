@@ -220,4 +220,53 @@ This consumes Kafka offsets, writes them to Snowflake VARIANT rows, and prints p
 
 ---
 
+## Milestone 3: Spark Sessionization (Kafka ➜ Snowflake MODELED layer)
+
+### Install Java + PySpark inside WSL
+```bash
+sudo apt install -y openjdk-17-jdk
+python3 -m pip install pyspark==3.5.1
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+```
+
+### Prepare Snowflake MODELLED schema
+```sql
+CREATE SCHEMA IF NOT EXISTS ANALYTICS.MODELLED;
+GRANT USAGE, CREATE TABLE ON SCHEMA ANALYTICS.MODELLED TO ROLE ACCOUNTADMIN;
+```
+
+### Run the sessionizer (connects Kafka ⇄ Snowflake)
+Keep Kafka + producers running, then execute:
+```bash
+spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0 \
+  spark_sessionizer.py \
+  --bootstrap localhost:9092 \
+  --topic wm_pageviews \
+  --from-beginning \
+  --session-gap-minutes 10 \
+  --account mawsfhr-wb66764 \
+  --user atharvrathore \
+  --password Atharvrathore@06 \
+  --warehouse BDT_warehouse \
+  --database ANALYTICS \
+  --raw-schema PUBLIC \
+  --raw-table PAGEVIEWS_RAW \
+  --target-schema MODELLED \
+  --target-table SESSION_METRICS \
+  --seed-from-raw \
+  --truncate-target
+```
+
+This backfills sessions using the Snowflake RAW table (Milestone 2) and keeps streaming Kafka events into the modeled table. Checkpoint files live under `data/checkpoints/sessionizer`.
+
+### Verify modeled data
+```sql
+SELECT project, session_start, session_end, events
+FROM ANALYTICS.MODELLED.SESSION_METRICS
+ORDER BY session_start DESC
+LIMIT 20;
+```
+
+---
+
 This is the complete unrendered Markdown, ready to paste into your repo.
