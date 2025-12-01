@@ -268,3 +268,36 @@ LIMIT 20;
 ```
 
 ---
+
+## Milestone 4: Streamlit Dashboard wired to Snowflake
+
+### Export Snowflake env vars inside WSL
+```bash
+export SNOWFLAKE_ACCOUNT=mawsfhr-wb66764
+export SNOWFLAKE_USER=atharvrathore
+export SNOWFLAKE_PASSWORD=Atharvrathore@06
+export SNOWFLAKE_WAREHOUSE=BDT_warehouse
+export SNOWFLAKE_DATABASE=ANALYTICS
+export SNOWFLAKE_TARGET_SCHEMA=MODELLED
+export SNOWFLAKE_TARGET_TABLE=SESSION_METRICS
+```
+
+### Keep Milestones 1-3 running
+- Kafka producer + topic with live data
+- Snowflake ingestion (loader or Kafka bridge)
+- Spark sessionizer streaming into `MODELLED.SESSION_METRICS`
+
+### Launch Streamlit
+```bash
+cd ~/Clickstream-Funnel-Analytics-on-a-NewSQL-Warehouse
+source BDT/bin/activate
+python -m streamlit run streamlit_app.py
+```
+
+Choose the desired view in the sidebar:
+- **Local Clickstream Demo** keeps the TSV-based exploration for quick testing.
+- **Snowflake Streaming Sessions** queries the Snowflake modeled table (lookback window + record limit controls available). If it errors, re-check the env vars and ensure Spark is still writing rows.
+
+---
+
+This is the complete unrendered Markdown, ready to paste into your repo.

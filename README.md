@@ -271,3 +271,33 @@ LIMIT 20;
 ```
 
 If you need to regenerate sessions, rerun the command with `--truncate-target --seed-from-raw` before letting the stream catch up on Kafka offsets.
+
+## Milestone 4: Dashboard (Streamlit) Connected to the Pipeline
+The Streamlit app now supports two views:
+1. **Local Clickstream Demo** – the existing TSV-based experience for fast iteration.
+2. **Snowflake Streaming Sessions** – a live dashboard powered by the Kafka ➜ Snowflake ➜ Spark pipeline from Milestones 1-3.
+
+### Prerequisites
+- Python deps already installed (`streamlit`, `snowflake-connector`, `pyspark`).
+- Snowflake environment variables exported (reuse the ones from Milestones 2-3):
+  ```bash
+  export SNOWFLAKE_ACCOUNT=xy12345.us-east-1
+  export SNOWFLAKE_USER=demo_user
+  export SNOWFLAKE_PASSWORD='*****'
+  export SNOWFLAKE_WAREHOUSE=LOAD_WH
+  export SNOWFLAKE_DATABASE=ANALYTICS
+  export SNOWFLAKE_TARGET_SCHEMA=MODELLED
+  export SNOWFLAKE_TARGET_TABLE=SESSION_METRICS
+  ```
+- Milestone 1-3 services running (Kafka producer or bridge populating Snowflake, Spark sessionizer streaming results into `MODELLED.SESSION_METRICS`).
+
+### Run the dashboard
+```bash
+python -m streamlit run streamlit_app.py
+```
+
+Use the sidebar selector:
+- **Local Clickstream Demo** – identical to the original view (top entries, funnels, etc.).
+- **Snowflake Streaming Sessions** – queries the modeled Snowflake table, displays session metrics, trends, and the current contents of `ANALYTICS.MODELLED.SESSION_METRICS`.
+
+If the Snowflake view shows a configuration error, verify the environment variables and that the streaming job is writing rows. Once it connects, the metrics confirm end-to-end connectivity across all four milestones.
