@@ -152,16 +152,16 @@ Use the exact command:
 ```bash
 python3 snowflake_stage_loader.py \
   --source data/pageviews.tsv.gz \
-  --account <Your_account> \
-  --user <your_username> \
-  --password <your_Password> \
-  --warehouse BDT_warehouse \
-  --database ANALYTICS \
-  --schema PUBLIC \
+  --account "$SNOWFLAKE_ACCOUNT" \
+  --user "$SNOWFLAKE_USER" \
+  --password "$SNOWFLAKE_PASSWORD" \
+  --warehouse "$SNOWFLAKE_WAREHOUSE" \
+  --database "$SNOWFLAKE_DATABASE" \
+  --schema "$SNOWFLAKE_SCHEMA" \
   --role ACCOUNTADMIN
 ```
 
-This will load the **pageviews** dataset into your Snowflake table `ANALYTICS.PUBLIC.PAGEVIEWS_RAW`.
+This will load the **pageviews** dataset into your Snowflake table ``${SNOWFLAKE_DATABASE}.${SNOWFLAKE_SCHEMA}.PAGEVIEWS_RAW``.
 
 ---
 
@@ -171,24 +171,24 @@ If your extracted TSV file is named `clickstream.tsv`, run:
 ```bash
 python3 snowflake_stage_loader.py \
   --source data/clickstream.tsv \
-  --account <Your_account> \
-  --user <your_username> \
-  --password <your_Password> \
-  --warehouse BDT_warehouse \
-  --database ANALYTICS \
-  --schema PUBLIC \
+  --account "$SNOWFLAKE_ACCOUNT" \
+  --user "$SNOWFLAKE_USER" \
+  --password "$SNOWFLAKE_PASSWORD" \
+  --warehouse "$SNOWFLAKE_WAREHOUSE" \
+  --database "$SNOWFLAKE_DATABASE" \
+  --schema "$SNOWFLAKE_SCHEMA" \
   --role ACCOUNTADMIN
 ```
 
-This loads the **clickstream edge data** into `ANALYTICS.PUBLIC.CLICKSTREAM_RAW` (auto-created table via script).
+This loads the **clickstream edge data** into ``${SNOWFLAKE_DATABASE}.${SNOWFLAKE_SCHEMA}.CLICKSTREAM_RAW`` (auto-created table via script).
 
 ---
 
 # Milestone 2 Summary (Final Checklist)
 
 ✓ Snowflake CLI not required (we use Python connector)  
-✓ Warehouse `BDT_warehouse` exists  
-✓ Database `ANALYTICS` and schema `PUBLIC` exist  
+✓ Warehouse `$SNOWFLAKE_WAREHOUSE` exists  
+✓ Database `$SNOWFLAKE_DATABASE` and schema `$SNOWFLAKE_SCHEMA` exist  
 ✓ `pageviews.tsv.gz` ingested successfully  
 ✓ `clickstream.tsv` ingested successfully  
 ✓ Raw VARIANT tables created if not present  
@@ -207,12 +207,12 @@ python kafka_to_snowflake.py \
   --topic wm_pageviews \
   --from-beginning \
   --batch-size 1000 \
-  --account <Your_account> \
-  --user <your_username> \
-  --password <your_Password> \
-  --warehouse BDT_warehouse \
-  --database ANALYTICS \
-  --schema PUBLIC \
+  --account "$SNOWFLAKE_ACCOUNT" \
+  --user "$SNOWFLAKE_USER" \
+  --password "$SNOWFLAKE_PASSWORD" \
+  --warehouse "$SNOWFLAKE_WAREHOUSE" \
+  --database "$SNOWFLAKE_DATABASE" \
+  --schema "$SNOWFLAKE_SCHEMA" \
   --role ACCOUNTADMIN
 ```
 
@@ -231,8 +231,8 @@ export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
 
 ### Prepare Snowflake MODELLED schema
 ```sql
-CREATE SCHEMA IF NOT EXISTS ANALYTICS.MODELLED;
-GRANT USAGE, CREATE TABLE ON SCHEMA ANALYTICS.MODELLED TO ROLE ACCOUNTADMIN;
+CREATE SCHEMA IF NOT EXISTS <your_database>.<your_modeled_schema>;
+GRANT USAGE, CREATE TABLE ON SCHEMA <your_database>.<your_modeled_schema> TO ROLE ACCOUNTADMIN;
 ```
 
 ### Run the sessionizer (connects Kafka ⇄ Snowflake)
@@ -244,12 +244,12 @@ spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0 \
   --topic wm_pageviews \
   --from-beginning \
   --session-gap-minutes 10 \
-  --account <Your_account> \
-  --user <your_username> \
-  --password <your_Password> \
-  --warehouse BDT_warehouse \
-  --database ANALYTICS \
-  --raw-schema PUBLIC \
+  --account "$SNOWFLAKE_ACCOUNT" \
+  --user "$SNOWFLAKE_USER" \
+  --password "$SNOWFLAKE_PASSWORD" \
+  --warehouse "$SNOWFLAKE_WAREHOUSE" \
+  --database "$SNOWFLAKE_DATABASE" \
+  --raw-schema "$SNOWFLAKE_SCHEMA" \
   --raw-table PAGEVIEWS_RAW \
   --target-schema MODELLED \
   --target-table SESSION_METRICS \
@@ -262,7 +262,7 @@ This backfills sessions using the Snowflake RAW table (Milestone 2) and keeps st
 ### Verify modeled data
 ```sql
 SELECT project, session_start, session_end, events
-FROM ANALYTICS.MODELLED.SESSION_METRICS
+FROM <your_database>.<your_modeled_schema>.SESSION_METRICS
 ORDER BY session_start DESC
 LIMIT 20;
 ```
@@ -273,13 +273,14 @@ LIMIT 20;
 
 ### Export Snowflake env vars inside WSL
 ```bash
-export SNOWFLAKE_ACCOUNT=mawsfhr-wb66764
-export SNOWFLAKE_USER=atharvrathore
-export SNOWFLAKE_PASSWORD=Atharvrathore@06
-export SNOWFLAKE_WAREHOUSE=BDT_warehouse
-export SNOWFLAKE_DATABASE=ANALYTICS
-export SNOWFLAKE_TARGET_SCHEMA=MODELLED
-export SNOWFLAKE_TARGET_TABLE=SESSION_METRICS
+export SNOWFLAKE_ACCOUNT=<your_account>
+export SNOWFLAKE_USER=<your_user>
+export SNOWFLAKE_PASSWORD='<your_password>'
+export SNOWFLAKE_WAREHOUSE=<your_default_warehouse>
+export SNOWFLAKE_DATABASE=<your_database>
+export SNOWFLAKE_SCHEMA=<your_raw_schema>
+export SNOWFLAKE_TARGET_SCHEMA=<your_modelled_schema>
+export SNOWFLAKE_TARGET_TABLE=<your_modelled_table>
 ```
 
 ### Keep Milestones 1-3 running
@@ -341,23 +342,23 @@ Choose the desired view in the sidebar:
    ```
 
 4. **Snowflake raw ingestion (Milestone 2)**
-   - Export env vars:
+   - Export env vars (or `source .env`):
      ```bash
-     export SNOWFLAKE_ACCOUNT=mawsfhr-wb66764
-     export SNOWFLAKE_USER=atharvrathore
-     export SNOWFLAKE_PASSWORD='Atharvrathore@06'
-     export SNOWFLAKE_WAREHOUSE=BDT_warehouse
-     export SNOWFLAKE_DATABASE=ANALYTICS
-     export SNOWFLAKE_SCHEMA=PUBLIC
+     export SNOWFLAKE_ACCOUNT=<your_account>
+     export SNOWFLAKE_USER=<your_user>
+     export SNOWFLAKE_PASSWORD='<your_password>'
+     export SNOWFLAKE_WAREHOUSE=<your_default_warehouse>
+     export SNOWFLAKE_DATABASE=<your_database>
+     export SNOWFLAKE_SCHEMA=<your_raw_schema>
      ```
    - Snowflake SQL (run once as ACCOUNTADMIN):
      ```sql
-     CREATE WAREHOUSE IF NOT EXISTS BDT_warehouse WAREHOUSE_SIZE='XSMALL' AUTO_SUSPEND=60 AUTO_RESUME=TRUE;
-     CREATE DATABASE IF NOT EXISTS ANALYTICS;
-     CREATE SCHEMA IF NOT EXISTS ANALYTICS.PUBLIC;
-     GRANT USAGE ON WAREHOUSE BDT_warehouse TO ROLE SYSADMIN;
-     GRANT USAGE ON DATABASE ANALYTICS TO ROLE SYSADMIN;
-     GRANT USAGE, CREATE TABLE ON SCHEMA ANALYTICS.PUBLIC TO ROLE SYSADMIN;
+     CREATE WAREHOUSE IF NOT EXISTS <your_warehouse> WAREHOUSE_SIZE='XSMALL' AUTO_SUSPEND=60 AUTO_RESUME=TRUE;
+     CREATE DATABASE IF NOT EXISTS <your_database>;
+     CREATE SCHEMA IF NOT EXISTS <your_database>.<your_schema>;
+     GRANT USAGE ON WAREHOUSE <your_warehouse> TO ROLE SYSADMIN;
+     GRANT USAGE ON DATABASE <your_database> TO ROLE SYSADMIN;
+     GRANT USAGE, CREATE TABLE ON SCHEMA <your_database>.<your_schema> TO ROLE SYSADMIN;
      ```
    - Load data:
      ```bash
@@ -377,8 +378,8 @@ Choose the desired view in the sidebar:
    ```
    - Prepare modeled schema:
      ```sql
-     CREATE SCHEMA IF NOT EXISTS ANALYTICS.MODELLED;
-     GRANT USAGE, CREATE TABLE ON SCHEMA ANALYTICS.MODELLED TO ROLE ACCOUNTADMIN;
+     CREATE SCHEMA IF NOT EXISTS <your_database>.<your_modeled_schema>;
+     GRANT USAGE, CREATE TABLE ON SCHEMA <your_database>.<your_modeled_schema> TO ROLE ACCOUNTADMIN;
      ```
    - Run streaming job (new terminal with env vars):
      ```bash
@@ -411,6 +412,6 @@ Choose the desired view in the sidebar:
 
 7. **Verify pipeline**
    - Kafka offsets: `~/kafka/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 --describe --group clickstream-consumer-group`
-   - Snowflake RAW: `SELECT COUNT(*) FROM ANALYTICS.PUBLIC.PAGEVIEWS_RAW;`
-   - Snowflake MODELED: `SELECT COUNT(*) FROM ANALYTICS.MODELLED.SESSION_METRICS;`
+   - Snowflake RAW: ``SELECT COUNT(*) FROM <your_database>.<your_raw_schema>.PAGEVIEWS_RAW;``
+   - Snowflake MODELED: ``SELECT COUNT(*) FROM <your_database>.<your_modeled_schema>.SESSION_METRICS;``
    - Streamlit shows session metrics without errors.

@@ -129,23 +129,23 @@ CREATE WAREHOUSE IF NOT EXISTS LOAD_WH
   AUTO_RESUME = TRUE
   INITIALLY_SUSPENDED = TRUE;
 
-CREATE DATABASE IF NOT EXISTS ANALYTICS;
-CREATE SCHEMA IF NOT EXISTS ANALYTICS.RAW;
+CREATE DATABASE IF NOT EXISTS <your_database>;
+CREATE SCHEMA IF NOT EXISTS <your_database>.<your_raw_schema>;
 GRANT USAGE ON WAREHOUSE LOAD_WH TO ROLE SYSADMIN;
-GRANT USAGE ON DATABASE ANALYTICS TO ROLE SYSADMIN;
-GRANT USAGE, CREATE TABLE ON SCHEMA ANALYTICS.RAW TO ROLE SYSADMIN;
+GRANT USAGE ON DATABASE <your_database> TO ROLE SYSADMIN;
+GRANT USAGE, CREATE TABLE ON SCHEMA <your_database>.<your_raw_schema> TO ROLE SYSADMIN;
 ```
 
 ### Load raw clickstream/pageview rows
 Set env vars (or pass flags) for Snowflake connection info:
 ```bash
-export SNOWFLAKE_ACCOUNT=xy12345.us-east-1
-export SNOWFLAKE_USER=demo_user
-export SNOWFLAKE_PASSWORD='*****'
-export SNOWFLAKE_WAREHOUSE=LOAD_WH
-export SNOWFLAKE_DATABASE=ANALYTICS
-export SNOWFLAKE_SCHEMA=RAW
-export SNOWFLAKE_TABLE=PAGEVIEWS_RAW
+export SNOWFLAKE_ACCOUNT=<your_account>
+export SNOWFLAKE_USER=<your_user>
+export SNOWFLAKE_PASSWORD='<your_password>'
+export SNOWFLAKE_WAREHOUSE=<your_default_warehouse>
+export SNOWFLAKE_DATABASE=<your_database>
+export SNOWFLAKE_SCHEMA=<your_schema_for_raw>
+export SNOWFLAKE_TABLE=<your_default_raw_table>
 
 python3 snowflake_stage_loader.py --source data/pageviews.tsv.gz
 python3 snowflake_stage_loader.py --source data/clickstream.tsv --table CLICKSTREAM_RAW
@@ -153,7 +153,7 @@ python3 snowflake_stage_loader.py --source data/clickstream.tsv --table CLICKSTR
 
 The script auto-creates the VARIANT table:
 ```sql
-CREATE TABLE IF NOT EXISTS ANALYTICS.RAW.PAGEVIEWS_RAW (
+CREATE TABLE IF NOT EXISTS <your_database>.<your_raw_schema>.PAGEVIEWS_RAW (
   raw VARIANT,
   source_file STRING,
   line_number NUMBER,
@@ -163,7 +163,7 @@ CREATE TABLE IF NOT EXISTS ANALYTICS.RAW.PAGEVIEWS_RAW (
 
 ### Validate the load
 ```sql
-USE ANALYTICS.RAW;
+USE <your_database>.<your_raw_schema>;
 SELECT COUNT(*) FROM PAGEVIEWS_RAW;
 SELECT raw:project::string AS project,
        raw:page::string AS page,
@@ -209,7 +209,7 @@ Offsets are stored in `line_number`, making replays traceable. Hit `Ctrl+C` once
 ```sql
 SELECT COUNT(*) AS rows_loaded,
        MAX(line_number) AS max_offset
-FROM ANALYTICS.RAW.PAGEVIEWS_RAW;
+FROM <your_database>.<your_raw_schema>.PAGEVIEWS_RAW;
 ```
 
 At this point Milestones 1 and 2 operate as a single pipeline: raw dumps → Kafka topic → Snowflake VARIANT staging.
@@ -225,8 +225,8 @@ export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64  # adjust for your distro
 ```
 Snowflake prep (run once):
 ```sql
-CREATE SCHEMA IF NOT EXISTS ANALYTICS.MODELLED;
-GRANT USAGE, CREATE TABLE ON SCHEMA ANALYTICS.MODELLED TO ROLE SYSADMIN;
+CREATE SCHEMA IF NOT EXISTS <your_database>.<your_modelled_schema>;
+GRANT USAGE, CREATE TABLE ON SCHEMA <your_database>.<your_modelled_schema> TO ROLE SYSADMIN;
 ```
 
 ### Stream Kafka into modeled Snowflake tables
@@ -254,7 +254,7 @@ spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.0 \
 
 What happens:
 - The script optionally backfills (`--seed-from-raw`) using the staged RAW data (Milestone 2), proving both layers communicate.
-- Structured Streaming reads live Kafka events, groups them by project + session window (gap configurable via `--session-gap-minutes`), and writes aggregates to `ANALYTICS.MODELLED.SESSION_METRICS`.
+- Structured Streaming reads live Kafka events, groups them by project + session window (gap configurable via `--session-gap-minutes`), and writes aggregates to `<your_database>.<your_modelled_schema>.SESSION_METRICS`.
 - State is checkpointed under `data/checkpoints/sessionizer` so restarts resume automatically.
 
 ### Validate the modeled layer
@@ -265,7 +265,7 @@ SELECT project,
        events,
        total_views,
        total_bytes
-FROM ANALYTICS.MODELLED.SESSION_METRICS
+FROM <your_database>.<your_modelled_schema>.SESSION_METRICS
 ORDER BY session_start DESC
 LIMIT 20;
 ```
@@ -280,15 +280,15 @@ The Streamlit app now supports two views:
 ### Prerequisites
 - Python deps already installed (`streamlit`, `snowflake-connector`, `pyspark`).
 - Snowflake environment variables exported (reuse the ones from Milestones 2-3):
-  ```bash
-  export SNOWFLAKE_ACCOUNT=xy12345.us-east-1
-  export SNOWFLAKE_USER=demo_user
-  export SNOWFLAKE_PASSWORD='*****'
-  export SNOWFLAKE_WAREHOUSE=LOAD_WH
-  export SNOWFLAKE_DATABASE=ANALYTICS
-  export SNOWFLAKE_TARGET_SCHEMA=MODELLED
-  export SNOWFLAKE_TARGET_TABLE=SESSION_METRICS
-  ```
+```bash
+export SNOWFLAKE_ACCOUNT=<your_account>
+export SNOWFLAKE_USER=<your_user>
+export SNOWFLAKE_PASSWORD='<your_password>'
+export SNOWFLAKE_WAREHOUSE=<your_default_warehouse>
+export SNOWFLAKE_DATABASE=<your_database>
+export SNOWFLAKE_TARGET_SCHEMA=<your_modelled_schema>
+export SNOWFLAKE_TARGET_TABLE=<your_modelled_table>
+```
 - Milestone 1-3 services running (Kafka producer or bridge populating Snowflake, Spark sessionizer streaming results into `MODELLED.SESSION_METRICS`).
 
 ### Run the dashboard
@@ -298,6 +298,6 @@ python -m streamlit run streamlit_app.py
 
 Use the sidebar selector:
 - **Local Clickstream Demo** – identical to the original view (top entries, funnels, etc.).
-- **Snowflake Streaming Sessions** – queries the modeled Snowflake table, displays session metrics, trends, and the current contents of `ANALYTICS.MODELLED.SESSION_METRICS`.
+- **Snowflake Streaming Sessions** – queries the modeled Snowflake table, displays session metrics, trends, and the current contents of `<your_database>.<your_modelled_schema>.SESSION_METRICS`.
 
 If the Snowflake view shows a configuration error, verify the environment variables and that the streaming job is writing rows. Once it connects, the metrics confirm end-to-end connectivity across all four milestones.
