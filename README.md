@@ -103,10 +103,6 @@ python kafka_consumer.py --bootstrap localhost:9092 --topic wm_pageviews --limit
 python kafka_consumer.py --bootstrap localhost:9092 --topic wm_pageviews --verbose
 ```
 
-<!-- ### 5) What remains for Milestone 1
-- Run the producer against your Kafka endpoint and confirm events land in `wm_pageviews`.
-- Run the profiler on the same file/stream to validate schema and spot anomalies.
-- Optional: add alerting/validation rules (e.g., drop records missing `page` or `project` before producing). -->
 
 ## Milestone 2: Warehouse Setup & Raw Staging
 Goal: Create a Snowflake warehouse/database/schema and land the raw Wikimedia pageviews into a VARIANT table for downstream modeling.
@@ -147,8 +143,8 @@ export SNOWFLAKE_DATABASE=<your_database>
 export SNOWFLAKE_SCHEMA=<your_schema_for_raw>
 export SNOWFLAKE_TABLE=<your_default_raw_table>
 
-python3 snowflake_stage_loader.py --source data/pageviews.tsv.gz
-python3 snowflake_stage_loader.py --source data/clickstream.tsv --table CLICKSTREAM_RAW
+python3 kafka_to_snowflake.py --bootstrap localhost:9092 --topic wm_pageviews --from-beginning --batch-size 1000 --account "" --user "" --password "" --warehouse "" --database "" --schema "" --table ""
+
 ```
 
 The script auto-creates the VARIANT table:
@@ -179,7 +175,7 @@ The `kafka_to_snowflake.py` helper drains the Kafka topic from Milestone 1 and
 
 ### 1) Produce events into Kafka
 ```bash
-python kafka_producer.py \
+python3 kafka_producer.py \
   --bootstrap localhost:9092 \
   --topic wm_pageviews \
   --limit 20000 \
@@ -293,7 +289,7 @@ export SNOWFLAKE_TARGET_TABLE=<your_modelled_table>
 
 ### Run the dashboard
 ```bash
-python -m streamlit run streamlit_app.py
+python3 -m streamlit run streamlit_app.py
 ```
 
 Use the sidebar selector:
